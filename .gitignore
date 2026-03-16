@@ -1,0 +1,8 @@
+# Ignore environment variables
+.env
+
+postgres_data/
+n8n_data/
+
+# OS files
+.DS_Store
