@@ -1,0 +1,724 @@
+{
+  "name": "Action-Stream",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "8992367d-2693-4796-a8f0-71b90ee84ead",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1104,
+        -96
+      ],
+      "id": "446a8f19-a1fb-45c5-b7d9-b99da9f11931",
+      "name": "Webhook",
+      "webhookId": "8992367d-2693-4796-a8f0-71b90ee84ead"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c9fe3304-dfc9-4e48-8969-805136f86128",
+              "name": "data.userId",
+              "value": "={{ $json.body.events[0].source.userId }}",
+              "type": "string"
+            },
+            {
+              "id": "733e19b8-afbc-4023-ada2-97510a1f6097",
+              "name": "data.message.id",
+              "value": "={{ $json.body.events[0].message.id }}",
+              "type": "string"
+            },
+            {
+              "id": "fee09f71-0aa3-4a11-a2d5-0815aa4af367",
+              "name": "data.message.type",
+              "value": "={{ $json.body.events[0].message.type }}",
+              "type": "string"
+            },
+            {
+              "id": "f27e1db3-dbd8-4160-ab59-5067c0760b58",
+              "name": "data.message.text",
+              "value": "={{ $json.body.events[0].message.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -880,
+        -96
+      ],
+      "id": "91d7a8d7-178a-44ee-bb9c-e2cf9461a8de",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={\n  \"userLineId\": \"{{ $json.line_id }}\",\n  \"message\": \"{{ $('Edit Fields').item.json.data.message.text }}\",\n  \"crm\": {\n    \"known_customer\": {{ $json.known_customer }},\n    \"customer_id\": {{ $json.customer_id }},\n    \"customer_name\": \"{{ $('GET LINE USER PROFILE').item.json.displayName }}\",\n    \"line_id\": \"{{ $json.line_id }}\",\n    \"hours_threshold\": {{ $json.hours_threshold }},\n    \"open_deals\": {{ $json.open_deals }},\n    \"primary_quiet_deal_id\": \"{{ $json.primary_quiet_deal_id }}\"\n  }\n}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "คุณคือ AI ผู้ช่วยฝ่ายขายของ FlowCRM วิเคราะห์ข้อความจาก LINE OA และผลลัพธ์ต้องเป็น JSON ล้วน ห้ามมีข้อความนอก JSON\n\nข้อมูล CRM ที่ผู้ใช้แนบมาใน user message ใต้คีย์ \"crm\" เป็นความจริงจากระบบ — ห้ามเปลี่ยน known_customer, customer_id, deal_id ให้คลาดจากข้อมูลนั้น\n\nกฎสำหรับ flags.should_upsert_customer:\n- ถ้า crm.known_customer เป็น true → ตั้ง should_upsert_customer เป็น false เสมอ (ไม่สร้างลูกค้าใหม่ซ้ำ)\n- ถ้า crm.known_customer เป็น false และ intent เป็น \"opportunity\" → should_upsert_customer เป็น true\n- ถ้า intent เป็น \"general\" และเป็นลูกค้าใหม่ที่ยังไม่จำเป็นต้องเปิดดีล → should_upsert_customer อาจเป็น true เฉพาะเมื่อต้องการเก็บ contact สำหรับติดตาม (เลือกตามความหมายข้อความ)\n\nintent ต้องเป็นหนึ่งในค่า:\n- \"opportunity\" — สนใจซื้อ / ถามราคา / ขอใบเสนอราคา\n- \"general\" — ทักทาย ถามทั่วไป ไม่ชัดเจนเรื่องซื้อ\n- \"follow_up_reply\" — ลูกค้าทักกลับในบริบทที่มีดีลค้าง หรือข้อความสัมพันธ์กับการติดตามงาน (ใช้เมื่อ crm มี open_deals หรือ primary_quiet_deal_id)\n\nถ้า crm.primary_quiet_deal_id ไม่เป็น null และข้อความลูกค้าสอดคล้องกับการติดตาม / ตอบกลับดีลที่ค้าง — ควรตั้ง intent เป็น \"follow_up_reply\" และใส่ deal.target_deal_id เป็น string ของ deal นั้น\n\nรูปแบบ JSON ที่อนุญาต (keys ครบ ถ้าไม่มีค่าให้ใช้ null หรือ false ตามชนิด):\n\n{\n  \"intent\": \"opportunity\" | \"general\" | \"follow_up_reply\",\n  \"summary\": \"string สั้นๆ 1 ประโยค\",\n  \"extracted_product\": \"string|null\",\n  \"priority\": \"high\" | \"normal\" | \"low\",\n  \"flags\": {\n    \"should_upsert_customer\": boolean,\n    \"should_create_activity\": boolean,\n    \"should_save_conversation\": boolean\n  },\n  \"activity\": {\n    \"title\": \"string\",\n    \"description\": \"string|null\",\n    \"activity_type\": \"line\",\n    \"priority_label\": \"high\" | \"normal\" | \"low\"\n  },\n  \"deal\": {\n    \"target_deal_id\": \"string|null\",\n    \"note\": \"string|null\"\n  },\n  \"customer_hint\": {\n    \"display_name\": \"string|null\"\n  }\n}\n\nกติกา flags:\n- should_create_activity = true เมื่อต้องให้เซลล์มีงานชัดเจนใน Action Stream (เช่น opportunity, follow-up สำคัญ, หรือดีลเงียบ + ลูกค้าทักกลับ)\n- should_save_conversation = true แทบทุกครั้งที่ต้องการเก็บประวัติใน Laravel (แนะนำ true ถ้ามี HTTP save conversation)\n\nอย่าใส่ markdown code fence ห้ามมีคำอธิบายก่อน/หลัง JSON"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -160,
+        -96
+      ],
+      "id": "0e956ba1-9ba3-4d99-a9a5-819d2cd0c54d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.line_id }}",
+        "sessionTTL": 2592000,
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+      "typeVersion": 1.5,
+      "position": [
+        -80,
+        128
+      ],
+      "id": "49d1e432-f789-4938-a42d-52ef16feea71",
+      "name": "Redis Chat Memory",
+      "credentials": {
+        "redis": {
+          "id": "fVMKx2hENVwPWe5M",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "opportunity",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "18f3995e-88bf-4805-9b05-6aecc0e9127c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Opportunity"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f6727c98-6a12-4272-a5e1-08aedcf2c80c",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "general",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "General"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        256,
+        -288
+      ],
+      "id": "c2b8d0a6-14e4-4467-a67f-e1569786f65e",
+      "name": "Router"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:80/api/integrations/line/customers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"line_user_id\": \"{{ $('Edit Fields').item.json.data.userId }}\",\n  \"name\": \"{{ $('Router').item.json.output.customer_hint.display_name }}\",\n  \"phone_num\": \"\",\n  \"team_id\": \"\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        704,
+        -576
+      ],
+      "id": "591569b1-d756-4bde-bb66-56fafcc4ca23",
+      "name": "POST CUSTOMERS",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "6McEo8oy5H0FiAOv",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:80/api/integrations/line/conversation",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"line_user_id\": \"{{ $('Edit Fields').item.json.data }}\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"...\" },\n    { \"role\": \"assistant\", \"content\": \"...\" }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        480,
+        96
+      ],
+      "id": "dbbc4e03-5ff9-4396-92cd-1a8654638525",
+      "name": "POST CONVERSATION",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "6McEo8oy5H0FiAOv",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"intent\": \"opportunity\",\n  \"summary\": \"ลูกค้าถามราคาแพ็กเกจนวดหน้าและสนใจจองสัปดาห์หน้า\",\n  \"extracted_product\": \"แพ็กเกจนวดหน้า\",\n  \"priority\": \"high\",\n  \"flags\": {\n    \"should_upsert_customer\": true,\n    \"should_create_activity\": true,\n    \"should_save_conversation\": true\n  },\n  \"activity\": {\n    \"title\": \"[LINE] สอบถามราคาแพ็กเกจนวดหน้า — ติดต่อเสนอราคา\",\n    \"description\": \"ลูกค้าสนใจจองสัปดาห์หน้า / intent: opportunity\",\n    \"activity_type\": \"line\",\n    \"priority_label\": \"high\"\n  },\n  \"deal\": {\n    \"target_deal_id\": null,\n    \"note\": null\n  },\n  \"customer_hint\": {\n    \"display_name\": \"ลูกค้า LINE\"\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        48,
+        128
+      ],
+      "id": "53cbc8a1-dab4-4fe7-9d55-b98bf5678d26",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $('Edit Fields').item.json.data.userId }}\",\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"{{ $json.text }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1104,
+        -800
+      ],
+      "id": "654c1f5d-7133-435a-b07b-95ba1d859abf",
+      "name": "LINE Reply",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "tEwrKZP4udrDbrmU",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:80/api/integrations/line/context?line_user_id={{ $json.userId }}&hours=48",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "value": "="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -432,
+        -96
+      ],
+      "id": "abfc7bd8-95ff-4192-90bc-410d4ce17518",
+      "name": "GET USER CONTEXT",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "6McEo8oy5H0FiAOv",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        128
+      ],
+      "id": "6a90ad41-e752-4f33-916f-232036e1e324",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "jD2AbI5jbXUHCspt",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "558565f0-080a-4fc0-8503-6d085d6786fa",
+              "leftValue": "={{ $json.output.flags.should_upsert_customer }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        480,
+        -480
+      ],
+      "id": "81f55eb3-5f25-4de1-91ed-a671323cda1d",
+      "name": "should create new customer"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        704,
+        -384
+      ],
+      "id": "99144155-d18b-4a48-b7a0-35606d2424f4",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:80/api/integrations/line/activities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"line_user_id\": \"{{ $('Edit Fields').item.json.data.userId }}\",\n    \"deal_id\": \"{{ $('AI Agent').item.json.output.deal.target_deal_id }}\",\n    \"name\": \"[LINE] {{ $json.output.summary }}\",\n    \"description\": \"สรุปจาก AI / n8n\",\n    \"activity_type\": \"line\",\n    \"priority_label\": \"{{ $json.output.priority }}\"\n  }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        704,
+        -192
+      ],
+      "id": "8e9e57c2-f44e-45c9-8c6a-b75c4ee25deb",
+      "name": "POST ACTIVITIES",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "6McEo8oy5H0FiAOv",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "558565f0-080a-4fc0-8503-6d085d6786fa",
+              "leftValue": "={{ $json.output.flags.should_create_activity }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        480,
+        -96
+      ],
+      "id": "3bc4ba8f-5b8d-41ad-94c5-761a31f2562f",
+      "name": "should create new activity"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        704,
+        0
+      ],
+      "id": "9776b57e-237e-43e4-a08b-77fbb6cda07d",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "558565f0-080a-4fc0-8503-6d085d6786fa",
+              "leftValue": "={{ $json.output.flags.should_create_activity }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        256,
+        192
+      ],
+      "id": "78795950-083c-47df-8b93-a23f229561f4",
+      "name": "should save conversation"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        480,
+        288
+      ],
+      "id": "53d663a8-4aca-4076-a559-bbb537d3659a",
+      "name": "No Operation, do nothing2"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.line.me/v2/bot/profile/{{ $json.data.userId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer srfRzjXf+XlQOb+o/9ADc7qcRZea+wQPS2aJyE+yXdFQgk2CS0USAaAVMGWGUCkKRk92efoxkA2Z8ZHMUv4rXwOet/M4/l0574FhiiFQr/ZQ4QNpOd+MFzZf+AsGvsvQbZ5qNgZxJsoOCp2KXME3uwdB04t89/1O/w1cDnyilFU="
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "value": "="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -656,
+        -96
+      ],
+      "id": "22d6c3e8-0e7b-4849-8a60-3757b6c8b409",
+      "name": "GET LINE USER PROFILE"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "GET LINE USER PROFILE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "should save conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "should create new customer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "should create new activity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET USER CONTEXT": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "should create new customer": {
+      "main": [
+        [
+          {
+            "node": "POST CUSTOMERS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "should create new activity": {
+      "main": [
+        [
+          {
+            "node": "POST ACTIVITIES",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "should save conversation": {
+      "main": [
+        [
+          {
+            "node": "POST CONVERSATION",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET LINE USER PROFILE": {
+      "main": [
+        [
+          {
+            "node": "GET USER CONTEXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6101f763-8cdb-4050-a2cf-d9d4fd06280b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bb90ec6699141431eba6ab3bd3aa943dfdef904d15119786907763574fa95e50"
+  },
+  "id": "y6LLJRH76RhmwBME",
+  "tags": []
+}
