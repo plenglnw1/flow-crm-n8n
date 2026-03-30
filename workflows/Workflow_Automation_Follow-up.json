@@ -1,0 +1,404 @@
+{
+  "name": "Automated Follow-up",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "addToDate",
+        "magnitude": "1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -112
+      ],
+      "id": "9d2bc712-ac5c-425e-b657-3f4e81d2e225",
+      "name": "Date & Time"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "47ed81c4-47df-4949-8e91-63385fa001c2",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        -112
+      ],
+      "id": "1e8dd9db-57e9-45a5-9edc-fe555107e6c0",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        464,
+        -16
+      ],
+      "id": "85572e41-e79f-43da-897a-af0b5fb87699",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deal-stage-moved",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -432,
+        -208
+      ],
+      "id": "5df66711-b068-45da-8986-7e1673aa925c",
+      "name": "Webhook",
+      "webhookId": "a2cf214d-fded-4aab-a04d-d5b12583a6e3"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        16,
+        -304
+      ],
+      "id": "39a439f2-bd41-42af-80bc-b9991295fd4d",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={\n  \"userLineId\": \"{{ $json.line_id }}\",\n  \"message\": \"{{ $json.open_deals[0].next_action }}\",\n  \"crm\": {\n    \"deal_name\": {{ $json.open_deals[0].deal_name }}\n    \"stage_name\": {{ $json.open_deals[0].stage_name }}\n    \"next_action\": {{ $json.open_deals[0].next_action }}\n    \"next_action_date\": {{ $json.open_deals[0].next_action_date }}\n    \"known_customer\": {{ $json.known_customer }},\n    \"customer_id\": {{ $json.customer_id }},\n    \"customer_name\": \"{{ $json.customer_name }}\",\n    \"line_id\": \"{{ $json.line_id }}\",\n    \"hours_threshold\": {{ $json.hours_threshold }},\n    \"open_deals\": {{ $json.open_deals }},\n    \"primary_quiet_deal_id\": \"{{ $json.primary_quiet_deal_id }}\"\n  }\n}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "คุณคือผู้ช่วยฝ่ายขายของ FlowCRM — วิเคราะห์บริบทจาก JSON เท่านั้น ห้ามแต่งเหตุการณ์หรือข้อมูลลูกค้าที่ไม่มีในอินพุต\n\nอินพุตที่ได้รับ:\n1) webhook — การย้าย stage (deal_id, customer_id, line_id, to_stage_name, ฯลฯ)\n2) pipeline_context — ชื่อ template, รายการ stages, current_stage, next_stage และ description ของแต่ละ stage (คำแนะนำจากร้าน/องค์กร)\n3) line_context (อาจไม่มีถ้าไม่มี line_id) — known_customer, open_deals, primary_quiet_deal_id, ฯลฯ\n\nกฎ:\n- ต้องตอบเป็น JSON ล้วน ตรงกับ schema ที่ parser กำหนด — ไม่มี markdown ไม่มีอธิบายก่อน/หลัง\n- ใช้ next_stage.name และ next_stage.description เป็นหลักถ้ามี — ถ้าไม่มี next_stage ให้ตั้งงานสั้นๆ สอดคล้อง to_stage_name จาก webhook แทน\n- next_action — หัวข้องานสำหรับเซลล์ ภาษาไทย สั้น ชัด มี verb (เช่น “ส่งใบเสนอราคา”, “โทรติดตาม”, “นัดสาธิตสินค้า”)\n- next_action_date — รูปแบบ YYYY-MM-DD ตามเขตเวลาไทย — คำนวณจาก “วันนี้” และคำใบ้ใน next_stage.description (เช่น “ภายใน 1 วัน”) ถ้าชัด; ถ้าไม่ชัด ให้เป็น “วันพรุ่งนี้” จากวันที่ปัจจุบันในข้อความ user\n- priority — 1=ปกติ, 2=ควรทำเร็ว, 3=ด่วน (เวลาปิดดีลใกล้ / ลูกค้า hot / ดีลเงียบผิดปกติ)\n- ถ้า line_context บอกว่าดีลเงียบหรือมี primary_quiet_deal_id — พิจารณา priority สูงขึ้นได้เมื่อสมเหตุสมผล\n- ห้ามเปลี่ยน deal_id/customer_id จากของจริง; ห้ามอ้างราคา/สินค้าที่ไม่ปรากฏในอินพุต\n\nข้อความใน user message จะเป็น JSON รวม (คุณจัด node ก่อนหน้าให้รวม body จาก webhook + ผล GET pipeline + ผล GET context)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        752,
+        -208
+      ],
+      "id": "fdaf74aa-a398-4ec4-a471-1e4ceffb2564",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.line_id }}",
+        "sessionTTL": 2592000,
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+      "typeVersion": 1.5,
+      "position": [
+        832,
+        0
+      ],
+      "id": "cf4c7bd4-c7ad-4526-8674-179146a895d9",
+      "name": "Redis Chat Memory",
+      "credentials": {
+        "redis": {
+          "id": "fVMKx2hENVwPWe5M",
+          "name": "Redis account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"next_action\": \"[Auto] เสนอราคาแพ็กเกจนวดหน้า — ส่งใบเสนอราคาภายใน 24 ชม.\",\n  \"next_action_date\": \"2026-03-27\",\n  \"priority\": 2,\n  \"rationale_short\": \"เข้าสู่ stage เสนอราคา; template ระบุต้องดำเนินการภายใน 1 วัน\",\n  \"line_followup_hint\": \"ทัก LINE ยืนยันความต้องการและแนบลิงก์ใบเสนอราคาเมื่อพร้อม\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        944,
+        16
+      ],
+      "id": "cdc017c2-f0df-4846-816a-f2013adaedce",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        688,
+        16
+      ],
+      "id": "4984dfb0-fa99-4593-abb6-2dd550a5d144",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "jD2AbI5jbXUHCspt",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "47ed81c4-47df-4949-8e91-63385fa001c2",
+              "leftValue": "={{ $json.body.to_stage_is_won }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -208,
+        -208
+      ],
+      "id": "276ba2c0-2856-47de-8827-99be39f07580",
+      "name": "Check whether deal is finish"
+    },
+    {
+      "parameters": {
+        "url": "=http://host.docker.internal:80/api/integrations/line/context?line_user_id={{ $('Webhook').item.json.body.line_id }}&hours=48",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "value": "="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        464,
+        -208
+      ],
+      "id": "ca3727b9-7c5d-46a9-b76e-4f35dc1d8610",
+      "name": "GET USER CONTEXT",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "6McEo8oy5H0FiAOv",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:80/api/sales/automation/deals/{{ $('Webhook').item.json.body.deal_id }}/next-action",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"next_action\": \"{{ $json.output.next_action }}\",\n  \"next_action_date\": \"{{ $json.output.next_action_date }}\",\n  \"priority\": {{ $json.output.priority }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1152,
+        -208
+      ],
+      "id": "ddad0ea8-5aa9-4ced-a1b5-f11bbd67f0ae",
+      "name": "POST NEXT ACTION",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "6McEo8oy5H0FiAOv",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Date & Time": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "GET USER CONTEXT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check whether deal is finish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "POST NEXT ACTION",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check whether deal is finish": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Date & Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET USER CONTEXT": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3fc1101f-cd7e-4eec-bba6-c929f8e631d5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bb90ec6699141431eba6ab3bd3aa943dfdef904d15119786907763574fa95e50"
+  },
+  "id": "0lsH8nOSc31nGVyz",
+  "tags": []
+}
